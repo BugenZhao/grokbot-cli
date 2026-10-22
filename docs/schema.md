@@ -18,8 +18,13 @@ Generated files are committed so that `git diff` after an app update is the revi
 ## Updating after a Grok Bot release
 
 ```sh
-just update-schema                # tools/update-schema.sh: extract → protoc → used-RPC check → diff summary
+just update-schema                # installed app if present, else download the latest build
+just update-schema --download     # always download (any OS; no Grok Bot install needed)
+just update-schema "/path/Grok Bot.app"
 ```
+
+`tools/update-schema.sh` runs: fetch (if needed) → extract → `protoc` check (skipped if
+not installed) → used-RPC check → diff summary. Needs only `python3` and `git`.
 
 Then:
 
@@ -38,6 +43,33 @@ Then:
 Transcript bodies are JSON blobs with no schema; if `log`/`ask` print nothing or
 `[needs input]` stops appearing, dump raw entries (`grokbot log --json -n 50`) and update
 `src/transcript.rs` + `docs/transcript.md`.
+
+## Getting the app without installing it
+
+`tools/fetch_app.py` (used by `--download`) asks the app's own update feed for the
+newest build, the same request the app makes (`buildUpdateRequestUrl` in `main-core.cjs`),
+no auth required:
+
+```
+GET https://api2.cursor.sh/updates/api/update/<platform>/<channel>/<current version>/<machine id>/stable
+  platform: darwin-arm64 | darwin-x64 | linux-x64 | linux-arm64 | win32-x64-user | win32-arm64-user
+  channel:  sand (stable) | sand-nightly | sand-dogfood
+→ 204 if <current version> is newest, else
+  darwin:      {"url": ".../darwin-arm64/<v>/Grok_Bot_<v>.zip", "name": "<v>"}
+  linux/win32: {"url": ".../Grok_Bot_<v>.AppImage" | "..._Setup.exe", "version", "sha256hash"?}
+```
+
+It always picks the macOS build: `app.asar` is platform-neutral JavaScript, and the macOS
+artifact is a plain zip (Linux ships AppImage/squashfs, Windows a Setup.exe). The zip is
+read through HTTP range requests (`downloads.cursor.com` supports them; it rejects the
+default `Python-urllib` user agent), so only the central directory, `app.asar` and
+`Info.plist` are transferred: ~19 MB of the ~140 MB archive for 0.75.0. Output:
+`.cache/app/<version>/Contents/{Info.plist,Resources/app.asar}`, which `extract_schema.py
+--app` accepts like a real `.app`. For 0.75.0 the downloaded `app.asar` was byte-identical
+to the installed one.
+
+`/download/stable/<platform>/grok-bot-<id>` links on `api2.cursor.sh/updates` (the
+website's download buttons) redirect to the same artifacts.
 
 ## How the extraction works
 
@@ -81,7 +113,7 @@ The schema says *what* can be sent, not *what the app sends*. For that, extract 
 archive and read `dist/electron-main/main-app.cjs`:
 
 ```sh
-python3 -I tools/asar.py extract "/Applications/Grok Bot.app/Contents/Resources/app.asar" /tmp/gb
+python3 -I tools/asar.py extract .cache/app/<version>/Contents/Resources/app.asar /tmp/gb   # or the installed app's
 grep -o '.\{600\}sendGrokBotUserMessage(.\{900\}' /tmp/gb/dist/electron-main/main-app.cjs
 ```
 

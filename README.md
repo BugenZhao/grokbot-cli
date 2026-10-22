@@ -87,7 +87,7 @@ src/auth/          own login (PKCE/refresh) and read-only app import
 src/api.rs         serde types for the RPCs we use
 src/transcript.rs  transcript body decoding
 src/cmd/           one module per command group
-tools/             asar reader, schema extractor, used-RPC checker, update script
+tools/             app downloader, asar reader, schema extractor, used-RPC checker, update script
 justfile           build/install with code signing, lint, schema update
 schema/            generated: aiserver.proto, services.txt, used.proto
 ```

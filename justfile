@@ -29,9 +29,11 @@ lint:
     cargo fmt --check
     cargo clippy -- -D warnings
 
-# Re-extract the schema from the installed Grok Bot app and summarise what changed.
-update-schema app="/Applications/Grok Bot.app":
-    tools/update-schema.sh "{{app}}"
+# Re-extract the schema and summarise what changed. No argument: the installed app if
+# present, else download the latest build. Or pass `--download`, or a path to the .app.
+[positional-arguments]
+update-schema *args:
+    tools/update-schema.sh "$@"
 
 # Check that every RPC the CLI calls still exists in schema/aiserver.proto.
 check-rpcs:
