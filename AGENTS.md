@@ -57,6 +57,24 @@ just smoke                        # all steps
 just smoke --only ask,attachment  # a subset while iterating
 ```
 
+### Read the output, not just the verdict
+
+The assertions are deliberately mechanical (exit codes, the echoed token, event order).
+The script prints every command with its stdout, stderr and exit code, and saves the full
+transcript to `.cache/smoke/<timestamp>.log`. **After a run, read it and judge it the way a
+user would**, e.g.:
+
+- Does each reply actually answer its prompt, without extra or duplicated messages, stray
+  formatting, or replies that belong to a different turn?
+- Are stderr hints accurate (bot name, resume command, “needs input” text) and stdout
+  free of progress noise?
+- Does `--json` output look sane (no empty or placeholder fields, sensible outcomes)?
+- Are timings plausible (a step that suddenly takes much longer is a signal)?
+
+Anything odd counts as a finding even when every step passed: investigate it, or report
+it to the maintainer, and record genuine upstream surprises in docs/upstream-log.md.
+Use `-q` only for a quick yes/no; `--max-lines N` shows more of each stream.
+
 **Run `just smoke` after any change and commit only when it passes.** When you add or
 change a command, flag or exit code, add or update the matching `step_*` in
 `tools/smoke.py` in the same change. A step that cannot run is reported as `skip`, with
@@ -115,7 +133,7 @@ in `api.rs`, `ask` hangs or never sees replies, `log` shows nothing, `check-rpcs
 6. **Bump** `CLIENT_VERSION` in `src/connect.rs` to the app version you extracted from.
 7. **Update the docs in the same change** (next section). A fix without the matching doc
    update is incomplete.
-8. `just lint` and `just smoke`, then commit.
+8. `just lint` and `just smoke` (read the transcript, not just the summary), then commit.
 
 ## Keeping docs current
 
