@@ -35,6 +35,11 @@ lint:
 update-schema *args:
     tools/update-schema.sh "$@"
 
+# End-to-end test on the bot in $GROKBOT_TEST_AGENT (~3 min). `just smoke --only ask,log`
+[positional-arguments]
+smoke *args: build
+    python3 -I tools/smoke.py --bin target/debug/grokbot "$@"
+
 # Check that every RPC the CLI calls still exists in schema/aiserver.proto.
 check-rpcs:
     python3 -I tools/check_rpcs.py

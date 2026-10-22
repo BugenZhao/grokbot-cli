@@ -20,6 +20,7 @@ just lint               # cargo fmt --check + clippy -D warnings (must pass befo
 just update-schema      # re-extract schema (installed app, or download latest; any OS)
 just update-schema --download
 just check-rpcs         # every RPC used in src/ still exists in schema/aiserver.proto
+just smoke              # end-to-end test on the test bot ($GROKBOT_TEST_AGENT)
 grokbot -v rpc GrokBotService/<Method> '<json>'   # raw call; prints request + response
 ```
 
@@ -36,7 +37,8 @@ src/api.rs         serde types: ONLY the fields we use, protobuf-JSON convention
 src/transcript.rs  decoding of transcript entry bodies (JSON, not in the schema)
 src/cmd/*.rs       one module per command group
 src/ctx.rs         config, agent resolution, exit codes, table/time helpers
-tools/             fetch_app.py, asar.py, extract_schema.py, check_rpcs.py, update-schema.sh
+tools/             fetch_app.py, asar.py, extract_schema.py, check_rpcs.py, update-schema.sh,
+                   smoke.py (end-to-end test)
 schema/            GENERATED, committed: aiserver.proto, services.txt, used.proto
 docs/              see below
 ```
@@ -45,27 +47,41 @@ Never hand-edit files under `schema/`; change the generator in `tools/` and rege
 
 ## Testing against the live service
 
-There are no offline tests for the API layer; verify behaviour against the real backend.
+There are no offline tests for the API layer; behaviour is verified against the real
+backend by **`just smoke`** (`tools/smoke.py`), which builds the CLI and runs every command
+on the test bot, asserting exit codes and output (replies are checked with random tokens
+the bot is asked to echo). It takes ~3 minutes and sends about a dozen messages.
+
+```sh
+just smoke                        # all steps
+just smoke --only ask,attachment  # a subset while iterating
+```
+
+**Run `just smoke` after any change and commit only when it passes.** When you add or
+change a command, flag or exit code, add or update the matching `step_*` in
+`tools/smoke.py` in the same change. A step that cannot run is reported as `skip`, with
+the reason; investigate failures rather than weakening the assertion. Note any flaky step
+in docs/upstream-log.md.
 
 - Use **only** a dedicated test bot, given by the maintainer in **`GROKBOT_TEST_AGENT`**
   (bot UUID or name; set it in your shell or a git-ignored `.env`/`.envrc`). Run tests with
   `GROKBOT_AGENT="$GROKBOT_TEST_AGENT" grokbot …`. If the variable is unset, **stop and ask
   the maintainer** to create a throwaway bot in the Grok Bot app and set it; never pick
   another bot yourself. Messages to the test bot are free.
-- For routine tests, ask the test bot in chat to create a far-future routine (e.g. a yearly
-  reminder), toggle that one, and leave it disabled or ask the bot to delete it afterwards.
+- The `routines` step toggles the test bot's first routine and restores its state; it is
+  skipped when the bot has none. To cover it, ask the test bot in chat to create a
+  far-future routine (e.g. a yearly reminder).
 - Never commit the test bot's id, the maintainer's bot names, routine ids, or other
   account-specific values; use placeholders (`<bot>`, `<routine-id>`) in docs.
 - Read-only calls on other bots (`agents`, `status`, `routines`, `log --json` for
   *shapes*) are fine when needed to understand formats, but **never** send messages,
   interrupt, or toggle routines on any other bot, and do not paste their message contents
   into commits, docs or chat. Describe structures with values elided.
-- Prefix test messages with `[cli test …]` so they are recognisable in the transcript.
+- Prefix manual test messages with `[cli test …]` (the smoke test uses `[cli smoke]`) so
+  they are recognisable in the transcript. Write test prompts in English.
 - Auth for testing: `grokbot login --from-app` (needs the desktop app signed in). Isolate
-  test config with `XDG_CONFIG_HOME=<tmp dir>` when experimenting with auth.
-- A minimal regression pass after any change to request/response handling:
-  `agents`, `status`, `ask "<text>"`, `echo … | ask --json`, `ask --no-wait` + `wait`,
-  `ask -f <file>`, `log -n 10`, `routines`, and the change-specific path.
+  test config with `XDG_CONFIG_HOME=<tmp dir>` when experimenting with auth; the smoke test
+  uses whatever profile the environment selects.
 
 ## Safety rules (do not break)
 
@@ -99,7 +115,7 @@ in `api.rs`, `ask` hangs or never sees replies, `log` shows nothing, `check-rpcs
 6. **Bump** `CLIENT_VERSION` in `src/connect.rs` to the app version you extracted from.
 7. **Update the docs in the same change** (next section). A fix without the matching doc
    update is incomplete.
-8. `just lint`, run the regression pass on the test bot, commit.
+8. `just lint` and `just smoke`, then commit.
 
 ## Keeping docs current
 

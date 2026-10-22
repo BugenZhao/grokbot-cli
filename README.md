@@ -14,7 +14,7 @@ just install     # release build, signed with a stable identity, into ~/.cargo/b
 # or: cargo install --path .   (unsigned: macOS re-asks for keychain access after each rebuild)
 ```
 
-`just` lists the other recipes (`build`, `lint`, `update-schema`, `check-rpcs`).
+`just` lists the other recipes (`build`, `lint`, `smoke`, `update-schema`, `check-rpcs`).
 
 ## Sign in
 
@@ -89,7 +89,8 @@ src/auth/          own login (PKCE/refresh) and read-only app import
 src/api.rs         serde types for the RPCs we use
 src/transcript.rs  transcript body decoding
 src/cmd/           one module per command group
-tools/             app downloader, asar reader, schema extractor, used-RPC checker, update script
+tools/             app downloader, asar reader, schema extractor, used-RPC checker, update script,
+                   end-to-end smoke test
 justfile           build/install with code signing, lint, schema update
 schema/            generated: aiserver.proto, services.txt, used.proto
 ```
