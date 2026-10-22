@@ -43,8 +43,7 @@ grokbot routines disable f126d1d9   # by id or unique prefix
 grokbot rpc GrokBotService/ListGrokBotAgents '{}'   # raw RPC for exploring
 ```
 
-`-a` accepts a bot UUID, its name, or a unique prefix. Set a default with
-`GROKBOT_AGENT` or `default_agent` in the config file.
+`-a` accepts a bot UUID, its name, or a unique prefix (`GROKBOT_AGENT` works too).
 
 Output: replies go to **stdout**, progress and hints to **stderr** (`-q` silences them).
 `--json` prints one JSON object per line on every command.
@@ -66,7 +65,6 @@ Output: replies go to **stdout**, progress and hints to **stderr** (`-q` silence
 `~/.config/grokbot/config.toml` (or `profiles/NAME/config.toml` with `--profile NAME`):
 
 ```toml
-default_agent = "CLI Test"
 timeout = "10m"        # default for ask/wait
 poll_interval = "1s"
 ```

@@ -52,7 +52,6 @@ pub fn exit_code(err: &anyhow::Error) -> i32 {
 #[derive(Debug, Deserialize, Default)]
 #[serde(default)]
 pub struct Config {
-    pub default_agent: Option<String>,
     /// e.g. "10m"
     pub timeout: Option<String>,
     /// e.g. "1s"
@@ -136,16 +135,14 @@ impl Ctx {
         Ok(self.agents.as_deref().unwrap())
     }
 
-    /// `-a` value, else `$GROKBOT_AGENT` (via clap), else `default_agent` from config.
+    /// `-a` value, or `$GROKBOT_AGENT` (filled in by clap).
     pub fn agent_query(&self) -> Option<String> {
-        self.agent_flag
-            .clone()
-            .or_else(|| self.config.default_agent.clone())
+        self.agent_flag.clone()
     }
 
     pub fn resolve_agent(&mut self) -> Result<Agent> {
         let q = self.agent_query().ok_or_else(|| {
-            Exit::Usage("no bot selected: pass -a/--agent, set GROKBOT_AGENT, or default_agent in config.toml".into())
+            Exit::Usage("no bot selected: pass -a/--agent or set GROKBOT_AGENT".into())
         })?;
         self.resolve_agent_named(&q)
     }
