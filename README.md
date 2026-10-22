@@ -78,6 +78,8 @@ Environment: `GROKBOT_AGENT`, `GROKBOT_PROFILE`, `GROKBOT_TOKEN` (raw access tok
 - [docs/protocol.md](docs/protocol.md) — Connect transport, headers, errors
 - [docs/auth.md](docs/auth.md) — login flows and the app's credential storage
 - [docs/schema.md](docs/schema.md) — how the schema is extracted and how to update it
+- [docs/upstream-log.md](docs/upstream-log.md) — observed upstream behaviour and changes, by version
+- [AGENTS.md](AGENTS.md) — maintenance guide for coding agents
 
 ## Layout
 
