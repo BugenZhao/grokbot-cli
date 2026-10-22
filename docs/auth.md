@@ -64,7 +64,8 @@ with every build, so each rebuilt binary is a stranger to the keychain and promp
 designated requirement (identifier + certificate) and survives rebuilds; verified by
 rebuilding with different `RUSTFLAGS` (new binary hash) and reading the keychain again
 without a prompt. Any stable code-signing certificate works, including the free Apple
-Development one or a self-signed one; set `GROKBOT_SIGN_IDENTITY` to pick another.
+Development one or a self-signed one; set `GROKBOT_SIGN_IDENTITY` to pick another and
+`GROKBOT_SIGN_ID` to change the identifier (changing either costs one new prompt).
 
 Independently, the access-token cache means the keychain is read only by
 `login --from-app` and when the cached token expires (Cursor tokens last about 60 days).

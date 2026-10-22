@@ -39,7 +39,7 @@ grokbot status                      # running / idle / awaiting you, for every b
 grokbot stop -a ops                 # interrupt the current turn
 grokbot tasks -a ops [--done]       # background work items; --checklist for the session to-dos
 grokbot routines                    # scheduled routines of all bots
-grokbot routines disable f126d1d9   # by id or unique prefix
+grokbot routines disable <id>       # id or unique prefix, as listed
 grokbot rpc GrokBotService/ListGrokBotAgents '{}'   # raw RPC for exploring
 ```
 

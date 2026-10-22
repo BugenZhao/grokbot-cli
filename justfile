@@ -1,8 +1,8 @@
 # Signing identity and the stable code-signing identifier. Keychain "Always Allow"
 # grants are tied to this identifier + certificate, so they survive rebuilds
-# (see docs/auth.md). Override with e.g. `just identity="Developer ID Application" install`.
+# (see docs/auth.md). Override via GROKBOT_SIGN_IDENTITY / GROKBOT_SIGN_ID.
 identity := env("GROKBOT_SIGN_IDENTITY", "Apple Development")
-bundle_id := "com.bugenzhao.grokbot"
+bundle_id := env("GROKBOT_SIGN_ID", "com.bugenzhao.grokbot")
 bin_dir := env("CARGO_HOME", home_directory() / ".cargo") / "bin"
 
 default:

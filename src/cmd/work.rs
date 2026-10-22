@@ -86,7 +86,7 @@ fn tz() -> Option<String> {
         .ok()
         .filter(|s| !s.is_empty())
         .or_else(|| {
-            // /etc/localtime -> /var/db/timezone/zoneinfo/Asia/Singapore
+            // /etc/localtime -> /var/db/timezone/zoneinfo/Europe/Berlin
             std::fs::read_link("/etc/localtime").ok().and_then(|p| {
                 p.to_str()
                     .and_then(|s| s.split("zoneinfo/").nth(1))

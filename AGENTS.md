@@ -47,9 +47,15 @@ Never hand-edit files under `schema/`; change the generator in `tools/` and rege
 
 There are no offline tests for the API layer; verify behaviour against the real backend.
 
-- Use **only** the dedicated test bot **CLI Test**
-  (`bafcb711-851d-4a63-944e-dbc9784bb9bd`): `export GROKBOT_AGENT=bafcb711`.
-  Messages there are free; its routine “CLI 测试 routine” exists for toggle tests.
+- Use **only** a dedicated test bot, given by the maintainer in **`GROKBOT_TEST_AGENT`**
+  (bot UUID or name; set it in your shell or a git-ignored `.env`/`.envrc`). Run tests with
+  `GROKBOT_AGENT="$GROKBOT_TEST_AGENT" grokbot …`. If the variable is unset, **stop and ask
+  the maintainer** to create a throwaway bot in the Grok Bot app and set it; never pick
+  another bot yourself. Messages to the test bot are free.
+- For routine tests, ask the test bot in chat to create a far-future routine (e.g. a yearly
+  reminder), toggle that one, and leave it disabled or ask the bot to delete it afterwards.
+- Never commit the test bot's id, the maintainer's bot names, routine ids, or other
+  account-specific values; use placeholders (`<bot>`, `<routine-id>`) in docs.
 - Read-only calls on other bots (`agents`, `status`, `routines`, `log --json` for
   *shapes*) are fine when needed to understand formats, but **never** send messages,
   interrupt, or toggle routines on any other bot, and do not paste their message contents
