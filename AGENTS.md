@@ -41,6 +41,8 @@ src/ctx.rs         config, agent resolution, exit codes, table/time helpers
 tools/             fetch_app.py, asar.py, extract_schema.py, check_rpcs.py, update-schema.sh,
                    smoke.py (end-to-end test)
 schema/            GENERATED, committed: aiserver.proto, services.txt, used.proto
+justfile           build/install (code-signed), lint, test, smoke, update-schema
+.github/workflows/ ci.yml, release.yml
 docs/              see below
 ```
 
