@@ -58,5 +58,5 @@ jobs:
           }
       - name: Generated schema is valid proto
         run: |
-          sudo apt-get install -y --no-install-recommends protobuf-compiler >/dev/null
+          sudo apt-get install -y --no-install-recommends protobuf-compiler libprotobuf-dev >/dev/null
           cd schema && protoc --descriptor_set_out=/dev/null aiserver.proto
