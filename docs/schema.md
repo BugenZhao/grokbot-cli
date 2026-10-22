@@ -18,7 +18,7 @@ Generated files are committed so that `git diff` after an app update is the revi
 ## Updating after a Grok Bot release
 
 ```sh
-tools/update-schema.sh            # extract → protoc check → used-RPC check → diff summary
+just update-schema                # tools/update-schema.sh: extract → protoc → used-RPC check → diff summary
 ```
 
 Then:

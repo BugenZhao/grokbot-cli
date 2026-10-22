@@ -38,7 +38,7 @@ Read-only. Source: `~/Library/Application Support/Grok Bot/sand-secrets.json`
 `<enc>` is Electron `safeStorage` = Chromium OSCrypt on macOS:
 
 - password: keychain generic password, service `Grok Bot Safe Storage`, account `Grok Bot Key`
-  (macOS asks for permission on first access, and again after the binary changes);
+  (macOS asks for permission on first access; see “Keychain prompts” below);
 - key: `PBKDF2-HMAC-SHA1(password, "saltysalt", 1003 iterations, 16 bytes)`;
 - value: `base64("v10" || AES-128-CBC(key, iv = 16 × 0x20, PKCS#7))`.
   A `plaintext:v1:` prefix means stored unencrypted; `scoped:v1:` is stripped.
@@ -52,3 +52,19 @@ Rules this mode follows:
   the same (rejected) token, the CLI exits 3 asking you to open the app so it refreshes.
 - The secrets file layout is an app implementation detail; `src/auth/app.rs` fails with a
   descriptive error rather than guessing when it changes.
+
+## Keychain prompts
+
+macOS records an “Always Allow” grant against the binary's code signature. Cargo output
+is only ad-hoc signed (identifier `grokbot-<hash>`, no team), and that signature changes
+with every build, so each rebuilt binary is a stranger to the keychain and prompts again.
+
+`just build` / `just install` re-sign with a stable identity
+(`codesign -s "Apple Development" -i com.bugenzhao.grokbot`). The grant then follows the
+designated requirement (identifier + certificate) and survives rebuilds; verified by
+rebuilding with different `RUSTFLAGS` (new binary hash) and reading the keychain again
+without a prompt. Any stable code-signing certificate works, including the free Apple
+Development one or a self-signed one; set `GROKBOT_SIGN_IDENTITY` to pick another.
+
+Independently, the access-token cache means the keychain is read only by
+`login --from-app` and when the cached token expires (Cursor tokens last about 60 days).
