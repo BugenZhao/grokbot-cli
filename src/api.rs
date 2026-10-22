@@ -394,3 +394,55 @@ pub struct CompleteUploadResponse {
     pub alias: String,
     pub file_name: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn enum_suffix_strips_prefix() {
+        assert_eq!(
+            enum_suffix("GROK_BOT_SEND_STATUS_ACCEPTED", "GROK_BOT_SEND_STATUS"),
+            "accepted"
+        );
+        assert_eq!(
+            enum_suffix("SOMETHING_ELSE", "GROK_BOT_SEND_STATUS"),
+            "something_else"
+        );
+    }
+
+    #[test]
+    fn int64_as_string_or_number() {
+        let a: TurnSettlement =
+            serde_json::from_str(r#"{"turnId":"t","settledAtMs":"42"}"#).unwrap();
+        let b: TurnSettlement = serde_json::from_str(r#"{"settledAtMs":42}"#).unwrap();
+        assert_eq!((a.settled_at_ms, b.settled_at_ms), (42, 42));
+        let c: ClientState = serde_json::from_str("{}").unwrap();
+        assert_eq!(c.last_activity_at_ms, None);
+    }
+
+    #[test]
+    fn unknown_fields_are_ignored() {
+        let s: AgentStatus =
+            serde_json::from_str(r#"{"agentId":"x","isRunning":true,"brandNew":{"a":1}}"#).unwrap();
+        assert!(s.is_running);
+    }
+
+    #[test]
+    fn automation_record_parses_record_json() {
+        let a = Automation {
+            automation_id: "id".into(),
+            record_json: r#"{"name":"n","isEnabled":true,"nextRunAt":5,"extra":[]}"#.into(),
+        };
+        let r = a.record();
+        assert_eq!(
+            (r.name.as_str(), r.is_enabled, r.next_run_at),
+            ("n", true, Some(5))
+        );
+        let bad = Automation {
+            automation_id: "id".into(),
+            record_json: "nope".into(),
+        };
+        assert!(!bad.record().is_enabled);
+    }
+}

@@ -226,3 +226,107 @@ pub fn latest_seq(client: &Client, agent: &str, session: &str) -> Result<i64> {
         .first()
         .map_or(0, |e| e.seq))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry(kind: &str, body: serde_json::Value) -> Entry {
+        let raw = RawEntry {
+            seq: 7,
+            entry_kind: kind.into(),
+            entry_id: None,
+            body: Some(base64::engine::general_purpose::STANDARD.encode(body.to_string())),
+            body_omitted: false,
+        };
+        Entry::decode(&raw)
+    }
+
+    #[test]
+    fn decodes_common_fields() {
+        let e = entry(
+            "send-message",
+            serde_json::json!({"kind":"send-message","id":"t1s0","timestampMs":5,"requestId":"turn",
+                               "message":{"type":"text","content":"hi"}}),
+        );
+        assert_eq!((e.seq, e.id.as_str(), e.timestamp_ms), (7, "t1s0", 5));
+        assert_eq!(e.request_id.as_deref(), Some("turn"));
+        assert!(matches!(e.view(), View::Reply { text: "hi" }));
+    }
+
+    #[test]
+    fn classifies_entry_kinds() {
+        let user = entry(
+            "message",
+            serde_json::json!({"role":"user","content":"q","clientNonce":"n"}),
+        );
+        assert!(matches!(
+            user.view(),
+            View::User {
+                text: "q",
+                nonce: Some("n")
+            }
+        ));
+
+        let to_agent = entry(
+            "message",
+            serde_json::json!({"role":"assistant","content":"c","toAgent":{"name":"B"}}),
+        );
+        assert!(matches!(
+            to_agent.view(),
+            View::AgentMessage {
+                to: Some("B"),
+                text: "c"
+            }
+        ));
+
+        let widget = serde_json::json!({"message":{"type":"widget","widget":{"prompt":"A or B?",
+            "options":[{"label":"A"},{"label":"B"}]}}});
+        match entry("send-message", widget.clone()).view() {
+            View::NeedsInput { what, answered } => {
+                assert_eq!(what, "A or B? [A / B]");
+                assert!(!answered);
+            }
+            _ => panic!("widget not classified as needs-input"),
+        }
+        let mut answered = widget;
+        answered["respondedValue"] = "A".into();
+        assert!(matches!(
+            entry("send-message", answered).view(),
+            View::NeedsInput { answered: true, .. }
+        ));
+
+        let draft = entry(
+            "send-message",
+            serde_json::json!({"message":{"type":"email-draft"}}),
+        );
+        assert!(matches!(
+            draft.view(),
+            View::NeedsInput {
+                answered: false,
+                ..
+            }
+        ));
+
+        let att = entry("user-attachment", serde_json::json!({"file_name":"a.txt"}));
+        assert!(matches!(att.view(), View::Attachment { name: "a.txt" }));
+
+        assert!(matches!(
+            entry("voice-call", serde_json::json!({})).view(),
+            View::Other
+        ));
+    }
+
+    #[test]
+    fn tolerates_missing_or_bad_body() {
+        let raw = RawEntry {
+            seq: 1,
+            entry_kind: "message".into(),
+            body: Some("!!".into()),
+            ..Default::default()
+        };
+        let e = Entry::decode(&raw);
+        assert!(e.body.is_null());
+        assert!(matches!(e.view(), View::AgentMessage { text: "", .. }));
+    }
+}

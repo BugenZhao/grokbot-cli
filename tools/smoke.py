@@ -99,12 +99,18 @@ class Smoke:
 
     def step_agents(self):
         """bot list includes the test bot"""
-        code, out, err = self.run("agents", "--json")
-        self.expect(code == 0, f"exit {code}", out, err)
+        # Output not shown in full: it lists every bot on the account (names, descriptions,
+        # last messages). Only the test bot's row is printed.
+        code, out, err = self.run("agents", "--json", show=False)
+        self.expect(code == 0, f"exit {code}", "", err)
         rows = [json.loads(l) for l in out.splitlines() if l.strip()]
-        ids = {(r["agent"]["agentId"], r["agent"]["name"]) for r in rows}
         q = self.agent.lower()
-        self.expect(any(i.startswith(q) or n.lower() == q for i, n in ids), "test bot not in `agents` output")
+        mine = [r for r in rows if r["agent"]["agentId"].startswith(q) or r["agent"]["name"].lower() == q]
+        self.emit(f"  $ grokbot agents --json   ({len(rows)} bots; only the test bot shown)")
+        for r in mine:
+            self._stream("stdout", json.dumps(r, ensure_ascii=False))
+        self.emit("    → exit 0")
+        self.expect(len(mine) == 1, "test bot not in `agents` output")
 
     def step_status(self):
         """status for the selected bot only"""

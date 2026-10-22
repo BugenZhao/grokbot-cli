@@ -176,6 +176,10 @@ fn checksum(machine_id: &str) -> String {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_millis() as u64;
+    checksum_at(ms, machine_id)
+}
+
+fn checksum_at(ms: u64, machine_id: &str) -> String {
     let t = ms / 1_000_000;
     let mut bytes: Vec<u8> = (0..6).rev().map(|i| (t >> (i * 8)) as u8).collect();
     let mut prev = 165u8;
@@ -187,4 +191,29 @@ fn checksum(machine_id: &str) -> String {
         "{}{machine_id}",
         base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes)
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn checksum_matches_app_algorithm() {
+        // Expected value computed independently from the app's JS (`sS`/`pWt`).
+        assert_eq!(checksum_at(1_792_637_601_155, "abc"), "paaotvCSabc");
+    }
+
+    #[test]
+    fn rpc_error_auth_detection() {
+        let e = |code: &str, status| RpcError {
+            method: "M".into(),
+            http_status: status,
+            code: code.into(),
+            message: String::new(),
+        };
+        assert!(e("unauthenticated", 401).is_unauthenticated());
+        assert!(e("unknown", 401).is_unauthenticated());
+        assert!(!e("not_found", 404).is_unauthenticated());
+        assert_eq!(e("not_found", 404).to_string(), "M failed: not_found (404)");
+    }
 }

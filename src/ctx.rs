@@ -149,40 +149,7 @@ impl Ctx {
 
     /// Match by UUID / numeric id, exact name (case-insensitive), then unique prefix.
     pub fn resolve_agent_named(&mut self, q: &str) -> Result<Agent> {
-        let agents = self.agents()?;
-        let lq = q.to_lowercase();
-        if let Some(a) = agents.iter().find(|a| a.agent_id == q || a.id == q) {
-            return Ok(a.clone());
-        }
-        let exact: Vec<_> = agents
-            .iter()
-            .filter(|a| a.name.to_lowercase() == lq)
-            .collect();
-        if exact.len() == 1 {
-            return Ok(exact[0].clone());
-        }
-        let prefix: Vec<_> = agents
-            .iter()
-            .filter(|a| a.name.to_lowercase().starts_with(&lq) || a.agent_id.starts_with(&lq))
-            .collect();
-        match (exact.len(), prefix.as_slice()) {
-            (0, [one]) => Ok((*one).clone()),
-            (0, []) => {
-                Err(Exit::Usage(format!("no bot matches {q:?}; see `grokbot agents`")).into())
-            }
-            _ => {
-                let cands = if exact.is_empty() { prefix } else { exact };
-                let list: Vec<_> = cands
-                    .iter()
-                    .map(|a| format!("  {}  {}", &a.agent_id[..8], a.name))
-                    .collect();
-                Err(Exit::Usage(format!(
-                    "{q:?} matches several bots; use the id:\n{}",
-                    list.join("\n")
-                ))
-                .into())
-            }
-        }
+        match_agent(self.agents()?, q).cloned()
     }
 
     pub fn agent_name(&mut self, agent_id: &str) -> String {
@@ -218,6 +185,48 @@ impl Ctx {
     pub fn note(&self, msg: impl AsRef<str>) {
         if !self.quiet {
             eprintln!("{}", msg.as_ref());
+        }
+    }
+}
+
+/// Match by UUID / numeric id, exact name (case-insensitive), then unique prefix of the
+/// name or UUID.
+pub fn match_agent<'a>(agents: &'a [Agent], q: &str) -> Result<&'a Agent> {
+    let lq = q.to_lowercase();
+    if let Some(a) = agents.iter().find(|a| a.agent_id == q || a.id == q) {
+        return Ok(a);
+    }
+    let exact: Vec<_> = agents
+        .iter()
+        .filter(|a| a.name.to_lowercase() == lq)
+        .collect();
+    if let [one] = exact.as_slice() {
+        return Ok(one);
+    }
+    let prefix: Vec<_> = agents
+        .iter()
+        .filter(|a| a.name.to_lowercase().starts_with(&lq) || a.agent_id.starts_with(&lq))
+        .collect();
+    match (exact.len(), prefix.as_slice()) {
+        (0, [one]) => Ok(one),
+        (0, []) => Err(Exit::Usage(format!("no bot matches {q:?}; see `grokbot agents`")).into()),
+        _ => {
+            let cands = if exact.is_empty() { prefix } else { exact };
+            let list: Vec<_> = cands
+                .iter()
+                .map(|a| {
+                    format!(
+                        "  {}  {}",
+                        a.agent_id.chars().take(8).collect::<String>(),
+                        a.name
+                    )
+                })
+                .collect();
+            Err(Exit::Usage(format!(
+                "{q:?} matches several bots; use the id:\n{}",
+                list.join("\n")
+            ))
+            .into())
         }
     }
 }
@@ -346,4 +355,73 @@ pub fn one_line(s: &str, max: usize) -> String {
 pub fn print_json(v: &impl serde::Serialize) -> Result<()> {
     println!("{}", serde_json::to_string(v)?);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn agent(id: &str, uuid: &str, name: &str) -> Agent {
+        Agent {
+            id: id.into(),
+            agent_id: uuid.into(),
+            name: name.into(),
+            ..Default::default()
+        }
+    }
+
+    fn agents() -> Vec<Agent> {
+        vec![
+            agent("1", "aaaa1111-0000-0000-0000-000000000000", "Research"),
+            agent("2", "bbbb2222-0000-0000-0000-000000000000", "Researcher"),
+            agent("3", "cccc3333-0000-0000-0000-000000000000", "Ops"),
+            agent("4", "dddd4444-0000-0000-0000-000000000000", "ops"),
+        ]
+    }
+
+    fn usage_err(r: Result<&Agent>) -> String {
+        let e = r.unwrap_err();
+        assert_eq!(exit_code(&e), 2);
+        e.to_string()
+    }
+
+    #[test]
+    fn agent_matching() {
+        let a = agents();
+        assert_eq!(
+            match_agent(&a, "bbbb2222-0000-0000-0000-000000000000")
+                .unwrap()
+                .id,
+            "2"
+        );
+        assert_eq!(match_agent(&a, "3").unwrap().name, "Ops");
+        // Exact name beats a longer name sharing the prefix.
+        assert_eq!(match_agent(&a, "research").unwrap().id, "1");
+        assert_eq!(match_agent(&a, "researche").unwrap().id, "2");
+        assert_eq!(match_agent(&a, "cccc").unwrap().id, "3");
+        assert!(usage_err(match_agent(&a, "nope")).contains("no bot matches"));
+        assert!(usage_err(match_agent(&a, "res")).contains("several bots"));
+        // Two bots whose names differ only in case are ambiguous.
+        assert!(usage_err(match_agent(&a, "OPS")).contains("several bots"));
+    }
+
+    #[test]
+    fn exit_codes() {
+        assert_eq!(exit_code(&Exit::Refused("x".into()).into()), 4);
+        assert_eq!(exit_code(&Exit::Timeout("x".into()).into()), 5);
+        assert_eq!(exit_code(&Exit::NeedsInput("x".into()).into()), 6);
+        assert_eq!(exit_code(&auth::NotLoggedIn("x".into()).into()), 3);
+        assert_eq!(exit_code(&anyhow::anyhow!("x")), 1);
+    }
+
+    #[test]
+    fn text_helpers() {
+        assert_eq!(display_width("ab中文"), 6);
+        assert_eq!(one_line("hello\nworld", 20), "hello…");
+        assert_eq!(one_line("abcdef", 4), "abc…");
+        assert_eq!(one_line("中文中文", 5), "中文…");
+        assert_eq!(ago(0), "-");
+        assert_eq!(ago(now_ms() - 120_000), "2m ago");
+        assert!(ago(now_ms() + 3 * 3_600_000 + 60_000).starts_with("in 3h"));
+    }
 }

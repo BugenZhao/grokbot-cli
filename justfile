@@ -25,9 +25,14 @@ sign path="target/release/grokbot":
     codesign --force --sign "{{identity}}" --identifier {{bundle_id}} "{{path}}"
     @codesign -dv "{{path}}" 2>&1 | grep -E '^(Identifier|Authority=Apple Development|Authority=Developer ID|TeamIdentifier)' || true
 
+# Same checks as the Rust CI job.
 lint:
     cargo fmt --check
-    cargo clippy -- -D warnings
+    cargo clippy --all-targets -- -D warnings
+
+# Offline unit tests (no network, no credentials).
+test:
+    cargo test
 
 # Re-extract the schema and summarise what changed. No argument: the installed app if
 # present, else download the latest build. Or pass `--download`, or a path to the .app.

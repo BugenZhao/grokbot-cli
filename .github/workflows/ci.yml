@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    name: Rust (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo test --locked
+      - run: cargo build --release --locked
+
+  tools:
+    name: Schema & tools
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Python tools compile
+        run: python -m py_compile tools/*.py
+      - name: Shell scripts
+        run: shellcheck tools/*.sh
+      - name: Every RPC used by src/ exists in the schema
+        run: python -I tools/check_rpcs.py
+      - name: schema/used.proto is up to date with src/
+        run: |
+          python -I tools/check_rpcs.py --write >/dev/null
+          git diff --exit-code -- schema/used.proto || {
+            echo "::error::schema/used.proto is stale; run tools/check_rpcs.py --write and commit it"
+            exit 1
+          }
+      - name: Generated schema is valid proto
+        run: |
+          sudo apt-get install -y --no-install-recommends protobuf-compiler >/dev/null
+          cd schema && protoc --descriptor_set_out=/dev/null aiserver.proto

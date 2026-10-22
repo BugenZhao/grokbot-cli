@@ -12,9 +12,6 @@ use anyhow::{Context, Result, bail};
 use base64::Engine;
 use serde_json::Value;
 
-const KEYCHAIN_SERVICE: &str = "Grok Bot Safe Storage";
-const KEYCHAIN_ACCOUNT: &str = "Grok Bot Key";
-
 pub struct AppCredentials {
     pub access_token: String,
     pub machine_id: String,
@@ -27,6 +24,9 @@ fn secrets_path() -> Result<PathBuf> {
 }
 
 pub fn read() -> Result<AppCredentials> {
+    if !cfg!(target_os = "macos") {
+        bail!("--from-app is only supported on macOS; use `grokbot login` instead");
+    }
     let path = secrets_path()?;
     let raw = std::fs::read_to_string(&path).with_context(|| {
         format!(
@@ -45,7 +45,7 @@ pub fn read() -> Result<AppCredentials> {
         .context("the Grok Bot app has no active account; sign in there first")?;
     let account = &accounts["accounts"][active];
 
-    let key = derive_key()?;
+    let key = oscrypt_key(&keychain_password()?);
     let decrypt_field = |v: &Value, what: &str| -> Result<String> {
         let s = v
             .as_str()
@@ -60,18 +60,25 @@ pub fn read() -> Result<AppCredentials> {
     })
 }
 
-/// OSCrypt key: PBKDF2-HMAC-SHA1(keychain password, "saltysalt", 1003 rounds, 16 bytes).
-fn derive_key() -> Result<[u8; 16]> {
-    let password = security_framework::passwords::get_generic_password(
-        KEYCHAIN_SERVICE,
-        KEYCHAIN_ACCOUNT,
-    )
-    .context(
+#[cfg(target_os = "macos")]
+fn keychain_password() -> Result<Vec<u8>> {
+    const SERVICE: &str = "Grok Bot Safe Storage";
+    const ACCOUNT: &str = "Grok Bot Key";
+    security_framework::passwords::get_generic_password(SERVICE, ACCOUNT).context(
         "reading the \"Grok Bot Safe Storage\" keychain item (denied, or app never signed in)",
-    )?;
+    )
+}
+
+#[cfg(not(target_os = "macos"))]
+fn keychain_password() -> Result<Vec<u8>> {
+    bail!("no keychain support on this platform")
+}
+
+/// OSCrypt key: PBKDF2-HMAC-SHA1(keychain password, "saltysalt", 1003 rounds, 16 bytes).
+fn oscrypt_key(password: &[u8]) -> [u8; 16] {
     let mut key = [0u8; 16];
-    pbkdf2::pbkdf2_hmac::<sha1::Sha1>(&password, b"saltysalt", 1003, &mut key);
-    Ok(key)
+    pbkdf2::pbkdf2_hmac::<sha1::Sha1>(password, b"saltysalt", 1003, &mut key);
+    key
 }
 
 /// Values are base64("v10" || AES-128-CBC(PKCS7, iv = 16 spaces)). An optional
@@ -90,4 +97,47 @@ fn decrypt(key: &[u8; 16], value: &str) -> Result<String> {
         .decrypt_padded_vec_mut::<Pkcs7>(ct)
         .map_err(|_| anyhow::anyhow!("bad padding (wrong keychain key?)"))?;
     Ok(String::from_utf8(pt)?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use aes::cipher::BlockEncryptMut;
+
+    fn encrypt(key: &[u8; 16], plain: &str) -> String {
+        let iv = [b' '; 16];
+        let ct = cbc::Encryptor::<aes::Aes128>::new(key.into(), &iv.into())
+            .encrypt_padded_vec_mut::<Pkcs7>(plain.as_bytes());
+        base64::engine::general_purpose::STANDARD.encode([b"v10".as_slice(), &ct].concat())
+    }
+
+    #[test]
+    fn oscrypt_key_derivation() {
+        // hashlib.pbkdf2_hmac("sha1", b"peanuts", b"saltysalt", 1003, 16)
+        assert_eq!(
+            hex::encode(oscrypt_key(b"peanuts")),
+            "d9a09d499b4e1b7461f28e67972c6dbd"
+        );
+    }
+
+    #[test]
+    fn decrypt_round_trip_and_prefixes() {
+        let key = oscrypt_key(b"test-password");
+        let enc = encrypt(&key, "token-123");
+        assert_eq!(decrypt(&key, &enc).unwrap(), "token-123");
+        assert_eq!(
+            decrypt(&key, &format!("scoped:v1:{enc}")).unwrap(),
+            "token-123"
+        );
+        assert_eq!(decrypt(&key, "plaintext:v1:raw").unwrap(), "raw");
+    }
+
+    #[test]
+    fn decrypt_rejects_bad_input() {
+        let key = oscrypt_key(b"test-password");
+        let other = oscrypt_key(b"other");
+        assert!(decrypt(&other, &encrypt(&key, "x")).is_err());
+        let v11 = base64::engine::general_purpose::STANDARD.encode(b"v11aaaaaaaaaaaaaaaa");
+        assert!(decrypt(&key, &v11).is_err());
+    }
 }

@@ -9,18 +9,26 @@ to catch up when it does.
 
 ## Install
 
+Prebuilt binaries for macOS (Apple silicon) and Linux (x86_64, arm64) are attached to
+each [GitHub release](../../releases) as `grokbot-<version>-<target>.tar.gz` with a
+`.sha256` file. The macOS binary is ad-hoc signed and **not notarized**: if you download it
+with a browser, clear the quarantine flag first (`xattr -d com.apple.quarantine grokbot`);
+`curl` downloads are not affected.
+
+From source:
+
 ```sh
 just install     # release build, signed with a stable identity, into ~/.cargo/bin
 # or: cargo install --path .   (unsigned: macOS re-asks for keychain access after each rebuild)
 ```
 
-`just` lists the other recipes (`build`, `lint`, `smoke`, `update-schema`, `check-rpcs`).
+`just` lists the other recipes (`build`, `lint`, `test`, `smoke`, `update-schema`, `check-rpcs`).
 
 ## Sign in
 
 ```sh
 grokbot login             # own session via browser sign-in (recommended)
-grokbot login --from-app  # or borrow the Grok Bot desktop app's session (read-only, macOS)
+grokbot login --from-app  # or borrow the Grok Bot desktop app's session (read-only, macOS only)
 grokbot whoami
 ```
 

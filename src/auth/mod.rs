@@ -221,3 +221,46 @@ fn fresh_token(profile: &str, stored: &mut Stored, force: bool) -> Result<(Strin
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn jwt(claims: &str) -> String {
+        let b = |s: &str| base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(s);
+        format!("{}.{}.sig", b(r#"{"alg":"none"}"#), b(claims))
+    }
+
+    #[test]
+    fn jwt_expiry() {
+        assert_eq!(jwt_exp(&jwt(r#"{"exp":1234}"#)), Some(1234));
+        assert_eq!(jwt_exp("not-a-jwt"), None);
+        assert!(expires_soon(&jwt(r#"{"exp":1}"#)));
+        assert!(!expires_soon(&jwt(r#"{"exp":99999999999}"#)));
+        // Unparseable tokens are treated as valid; the server decides.
+        assert!(!expires_soon("opaque"));
+    }
+
+    #[test]
+    fn stored_round_trip() {
+        let s = Stored::Login {
+            access_token: "a".into(),
+            refresh_token: "r".into(),
+            machine_id: "m".into(),
+        };
+        let json = serde_json::to_string(&s).unwrap();
+        assert!(json.contains(r#""mode":"login""#));
+        assert!(matches!(
+            serde_json::from_str(&json).unwrap(),
+            Stored::Login { .. }
+        ));
+        let app: Stored = serde_json::from_str(r#"{"mode":"app"}"#).unwrap();
+        assert!(matches!(
+            app,
+            Stored::App {
+                cached_access_token: None,
+                machine_id: None
+            }
+        ));
+    }
+}

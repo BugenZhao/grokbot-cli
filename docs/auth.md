@@ -23,7 +23,7 @@ This session is independent of the app, so renewing never signs the app out.
 
 ## `grokbot login --from-app` — borrow the desktop app's session
 
-Read-only. Source: `~/Library/Application Support/Grok Bot/sand-secrets.json`
+Read-only, macOS only (other platforms get an error pointing to `grokbot login`). Source: `~/Library/Application Support/Grok Bot/sand-secrets.json`
 
 ```jsonc
 {

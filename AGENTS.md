@@ -16,7 +16,8 @@ learned in the docs**.
 ```sh
 just build              # debug build, code-signed (keeps keychain grants across rebuilds)
 just install            # release build, signed, into ~/.cargo/bin
-just lint               # cargo fmt --check + clippy -D warnings (must pass before committing)
+just lint               # cargo fmt --check + clippy --all-targets -D warnings (must pass)
+just test               # offline unit tests (must pass)
 just update-schema      # re-extract schema (installed app, or download latest; any OS)
 just update-schema --download
 just check-rpcs         # every RPC used in src/ still exists in schema/aiserver.proto
@@ -47,8 +48,14 @@ Never hand-edit files under `schema/`; change the generator in `tools/` and rege
 
 ## Testing against the live service
 
-There are no offline tests for the API layer; behaviour is verified against the real
-backend by **`just smoke`** (`tools/smoke.py`), which builds the CLI and runs every command
+Two layers:
+
+- **Unit tests** (`just test`, run by CI on macOS and Linux) cover pure logic: checksum,
+  OSCrypt decryption, protobuf-JSON decoding, transcript entry classification, bot-name
+  matching, exit codes. Add one whenever you change such logic or learn a new payload
+  shape (use a minimal, made-up sample, never real account data).
+- **Live smoke test**: there are no offline tests for the API itself; behaviour is
+  verified against the real backend by **`just smoke`** (`tools/smoke.py`), which builds the CLI and runs every command
 on the test bot, asserting exit codes and output (replies are checked with random tokens
 the bot is asked to echo). It takes ~3 minutes and sends about a dozen messages.
 
@@ -71,6 +78,8 @@ user would**, e.g.:
 - Does `--json` output look sane (no empty or placeholder fields, sensible outcomes)?
 - Are timings plausible (a step that suddenly takes much longer is a signal)?
 
+The printed output must only ever contain the test bot's data; if a step prints anything
+about other bots, treat that as a bug in the step and fix it (and delete the log).
 Anything odd counts as a finding even when every step passed: investigate it, or report
 it to the maintainer, and record genuine upstream surprises in docs/upstream-log.md.
 Use `-q` only for a quick yes/no; `--max-lines N` shows more of each stream.
@@ -133,7 +142,8 @@ in `api.rs`, `ask` hangs or never sees replies, `log` shows nothing, `check-rpcs
 6. **Bump** `CLIENT_VERSION` in `src/connect.rs` to the app version you extracted from.
 7. **Update the docs in the same change** (next section). A fix without the matching doc
    update is incomplete.
-8. `just lint` and `just smoke` (read the transcript, not just the summary), then commit.
+8. `just lint`, `just test` and `just smoke` (read the transcript, not just the summary),
+   then commit.
 
 ## Keeping docs current
 
@@ -158,6 +168,22 @@ Rules:
 - Remove or correct statements that are no longer true instead of appending caveats.
 - Keep docs in English, concise, with exact RPC/field names so they are greppable.
 - Mention the Grok Bot version when a behaviour is version-specific.
+
+## CI and releases
+
+- `.github/workflows/ci.yml` (push to main, PRs): fmt, clippy and unit tests on Ubuntu and
+  macOS; `py_compile` and `shellcheck` for `tools/`; `check_rpcs.py`; fails if
+  `schema/used.proto` is stale (run `tools/check_rpcs.py --write` after changing which
+  RPCs `src/` calls); `protoc` validity of `schema/aiserver.proto`. CI never talks to the
+  live backend and has no credentials; keep it that way.
+- `.github/workflows/release.yml`: pushing tag `vX.Y.Z` builds `aarch64-apple-darwin`,
+  `x86_64-unknown-linux-gnu` and `aarch64-unknown-linux-gnu` archives (+ `.sha256`) and
+  publishes a GitHub release with generated notes. The tag must equal the `Cargo.toml`
+  version or the build fails. `workflow_dispatch` builds the archives without publishing.
+  To release: bump `version` in `Cargo.toml`, commit, `git tag vX.Y.Z`, push the tag (only
+  when the maintainer asks). macOS binaries are ad-hoc signed and not notarized.
+- Keep the code building on Linux: macOS-only code (keychain) lives behind
+  `cfg(target_os = "macos")` with a clear error elsewhere.
 
 ## Conventions
 
